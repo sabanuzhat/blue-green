@@ -8,6 +8,10 @@ systemctl restart httpd
 ## Code Deploy Agent Bootstrap Script##
 
 
+#!/bin/bash -xe
+
+## CodeDeploy Agent Bootstrap Script##
+
 exec > >(tee /var/log/user-data.log|logger -t user-data -s 2>/dev/console) 2>&1
 AUTOUPDATE=false
 
@@ -19,23 +23,18 @@ if [ ${PLAT} = "ubuntu" ]; then
   # Satisfying even ubuntu older versions.
   apt-get -y install jq awscli ruby2.0 || apt-get -y install jq awscli ruby
 
-
-
 elif [ ${PLAT} = "amz" ]; then
   yum -y update
   yum install -y aws-cli ruby jq
 
 fi
-
 }
-
 function platformize(){
 
 #Linux OS detection#
  if hash lsb_release; then
    echo "Ubuntu server OS detected"
    export PLAT="ubuntu"
-
 
 elif hash yum; then
   echo "Amazon Linux detected"
@@ -44,13 +43,10 @@ elif hash yum; then
  else
    echo "Unsupported release"
    exit 1
-
  fi
 }
 
-
 function execute(){
-
 if [ ${PLAT} = "ubuntu" ]; then
 
   cd /tmp/
@@ -58,7 +54,7 @@ if [ ${PLAT} = "ubuntu" ]; then
   chmod +x ./install
 
   if ./install auto; then
-    echo "Instalation completed"
+    echo "Installation completed"
       if ! ${AUTOUPDATE}; then
             echo "Disabling Auto Update"
             sed -i '/@reboot/d' /etc/cron.d/codedeploy-agent-update
@@ -67,19 +63,18 @@ if [ ${PLAT} = "ubuntu" ]; then
       fi
     exit 0
   else
-    echo "Instalation script failed, please investigate"
+    echo "Installation script failed, please investigate"
     rm -f /tmp/install
     exit 1
   fi
 
 elif [ ${PLAT} = "amz" ]; then
-
   cd /tmp/
   wget https://aws-codedeploy-${REGION}.s3.amazonaws.com/latest/install
   chmod +x ./install
 
     if ./install auto; then
-      echo "Instalation completed"
+      echo "Installation completed"
         if ! ${AUTOUPDATE}; then
             echo "Disabling auto update"
             sed -i '/@reboot/d' /etc/cron.d/codedeploy-agent-update
@@ -88,7 +83,7 @@ elif [ ${PLAT} = "amz" ]; then
         fi
       exit 0
     else
-      echo "Instalation script failed, please investigate"
+      echo "Installation script failed, please investigate"
       rm -f /tmp/install
       exit 1
     fi
@@ -101,5 +96,6 @@ fi
 
 platformize
 installdep
-REGION=$(curl -s 169.254.169.254/latest/dynamic/instance-identity/document | jq -r ".region")
+TOKEN=`curl -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 21600"`
+REGION=$(curl -H "X-aws-ec2-metadata-token: $TOKEN"  -v http://169.254.169.254/latest/dynamic/instance-identity/document | jq -r ".region")
 execute
